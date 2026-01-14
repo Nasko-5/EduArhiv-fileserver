@@ -15,6 +15,17 @@ app.use(cors());
 
 app.use(express.raw({ type: "*/*", limit: "50mb" }));
 
+const basicAuth = require('express-basic-auth');
+
+// Password protection (optional - only if BASIC_AUTH_PASSWORD is set)
+if (process.env.BASIC_AUTH_PASSWORD) {
+  app.use(basicAuth({
+    users: { 'demo': process.env.BASIC_AUTH_PASSWORD },
+    challenge: true,
+    realm: 'EduArhiv Demo'
+  }));
+}
+
 // basic route
 app.get("/", (req, res) => {
   res.send(`
@@ -302,8 +313,6 @@ app.post("/rollback/{*path}", async (req, res) => {
     }
 });
 
-const PORT = 3000;
-
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://eduarhiv.com', 'https://www.eduarhiv.com']
@@ -311,7 +320,9 @@ app.use(cors({
   credentials: true
 }));
 
-app.listen(PORT, "0.0.0.0", () => {
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
   fs.mkdirSync(ACTIVE_ROOT, { recursive: true });
   fs.mkdirSync(AUDIT_ROOT, { recursive: true });
