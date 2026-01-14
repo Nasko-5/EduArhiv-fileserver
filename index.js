@@ -303,16 +303,13 @@ app.post("/rollback/{*path}", async (req, res) => {
 });
 
 const PORT = 3000;
-// Add CORS headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'x-api-key, Content-Type');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://eduarhiv.com', 'https://www.eduarhiv.com']
+    : true, // Allow all origins in development
+  credentials: true
+}));
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`API running on port ${PORT}`);
