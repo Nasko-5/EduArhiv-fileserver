@@ -17,7 +17,7 @@ app.post('/auth/register', async (req, res) => {
     
     // insert into database
     const [result] = await pool.query(
-      'INSERT INTO users (username, password_hash, role, created_by) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (username, password_hash, role, created_by) VALUES (?, ?, ?, ?)',
       [username, passwordHash, role, req.user?.id || null]  // req.user.id = whoever is logged in
     );
     
