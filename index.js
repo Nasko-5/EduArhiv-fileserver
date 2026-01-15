@@ -11,12 +11,9 @@ const ACTIVE_ROOT = "/data/active";
 const ARCHIVE_ROOT = "/data/archive/file-archive";
 const AUDIT_ROOT = "/data/archive/audit";
 
-app.use(cors());
 
-app.use(express.raw({ type: "*/*", limit: "50mb" }));
 
 const basicAuth = require('express-basic-auth');
-
 // Password protection (optional - only if BASIC_AUTH_PASSWORD is set)
 if (process.env.BASIC_AUTH_PASSWORD) {
   app.use(basicAuth({
@@ -25,6 +22,10 @@ if (process.env.BASIC_AUTH_PASSWORD) {
     realm: 'EduArhiv Demo'
   }));
 }
+
+app.use(cors());
+
+app.use(express.raw({ type: "*/*", limit: "50mb" }));
 
 // basic route
 app.get("/", (req, res) => {
