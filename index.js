@@ -5,7 +5,9 @@ const fsPromises = require("fs").promises;
 const cors = require("cors");
 const path = require("path");
 require('dotenv').config();
+const pool = require('./db');
 const app = express();
+require('./auth')(app);
 
 const ACTIVE_ROOT = "/data/active";
 const ARCHIVE_ROOT = "/data/archive/file-archive";
@@ -24,8 +26,29 @@ if (process.env.BASIC_AUTH_PASSWORD) {
 }
 
 app.use(cors());
-
 app.use(express.raw({ type: "*/*", limit: "50mb" }));
+
+async function initDatabase() {
+  try {
+    const sql = fs.readFileSync('./init.sql', 'utf8');
+    
+    // Split by semicolons and filter out empty statements
+    const statements = sql
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+    
+    // Execute each statement one by one
+    for (const statement of statements) {
+      await pool.query(statement);
+    }
+    
+    console.log('✓ Database tables ready!');
+  } catch (error) {
+    console.error('Database init error:', error);
+  }
+}
+initDatabase();  
 
 // basic route
 app.get("/", (req, res) => {
