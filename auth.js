@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const pool = require('./db');  
 
 module.exports = function(app) {
+
+
 // REGISTER/CREATE USER (for teachers to create student accounts)
 // POST /api/auth/register
 // Body: { username, password, email, role, classId }
