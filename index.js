@@ -8,8 +8,8 @@ const os = require("os");
 require("dotenv").config();
 
 const pool = require("./db");
+const { validateKey } = require("./utils");
 const basicAuth = require("express-basic-auth");
-require("./utils");
 
 // Constants
 const ACTIVE_ROOT = "/data/active";
@@ -51,6 +51,12 @@ app.use(express.raw({ type: "*/*", limit: "50mb" }));
 // Key validation middleware
 const checkKey = (req, res, next) => {
   if (!validateKey(req, res)) return;
+  next();
+};
+
+// Path validation middleware
+const validatePath = (req, res, next) => {
+  validatePath(req, res);
   next();
 };
 
@@ -123,10 +129,8 @@ app.get("/health", (req, res) => {
 // File System Routes
 // =============================================================================
 
-app.post("/fs/upload/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.post("/fs/upload", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
   const dir = path.dirname(full_path);
 
@@ -153,10 +157,8 @@ app.post("/fs/upload/{*path}", async (req, res) => {
   }
 });
 
-app.get("/fs/download/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.get("/fs/download", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
 
   try {
@@ -173,10 +175,8 @@ app.get("/fs/download/{*path}", async (req, res) => {
   }
 });
 
-app.delete("/fs/delete/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.delete("/fs/delete", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
 
   try {
@@ -197,10 +197,8 @@ app.delete("/fs/delete/{*path}", async (req, res) => {
   }
 });
 
-app.put("/fs/replace/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.put("/fs/replace", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
   const new_file_data = req.body;
 
@@ -230,10 +228,8 @@ app.put("/fs/replace/{*path}", async (req, res) => {
 // Version Management Routes
 // =============================================================================
 
-app.get("/list-versions/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.get("/fs/versions", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const archive_dir = path.join(ARCHIVE_ROOT, path.dirname(file_path));
   const base_name = path.basename(file_path, path.extname(file_path));
   const ext_name = path.extname(file_path);
@@ -265,10 +261,8 @@ app.get("/list-versions/{*path}", async (req, res) => {
   }
 });
 
-app.post("/fs/rollback/{*path}", async (req, res) => {
-  const file_path = parsePath(req, res);
-  if (!file_path) return;
-
+app.post("/fs/rollback", validatePath, async (req, res) => {
+  const file_path = req.file_path;
   const archive_dir = path.join(ARCHIVE_ROOT, path.dirname(file_path));
   const base_name = path.basename(file_path, path.extname(file_path));
   const ext_name = path.extname(file_path);

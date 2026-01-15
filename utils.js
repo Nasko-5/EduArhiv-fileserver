@@ -13,6 +13,24 @@ function isPathGood(root, targetPath) {
     return resolvedPath.startsWith(resolvedRoot + path.sep) || resolvedPath === resolvedRoot;
 }
 
+// midelware to validate 'path' query parameter
+const validatePath = (req, res, next) => {
+  const file_path = req.query.path;
+  
+  if (!file_path) {
+    return res.status(400).json({ error: "Path parameter is required" });
+  }
+  
+  if (!isPathGood(ACTIVE_ROOT, file_path)) {
+    console.log(`Invalid path attempt: ${file_path}`);
+    return res.status(400).json({ error: "Bad file path! Get outta here you smelly hacker!" });
+  }
+  
+  req.file_path = file_path;
+  next();
+};
+
+
 // get x-api-key header and compare it to the value of the .env API_KEY variable
 function validateKey(req, res) {
     const apiKey = req.headers["x-api-key"];
@@ -27,24 +45,12 @@ function validateKey(req, res) {
     return true;
 }
 
-// parse the file path from the request and validate it
-function parsePath(req, res) {
-    let file_path = req.path.substring(1); 
-    // Remove the endpoint prefix (everything up to and including the first slash)
-    const firstSlashIndex = file_path.indexOf('/');
-    if (firstSlashIndex !== -1) {
-        file_path = file_path.substring(firstSlashIndex + 1);
-    }
-    
-    console.log(file_path);
-    if (!isPathGood(ACTIVE_ROOT, file_path)) {
-        res.status(400).json({ error: "Bad file path! Get outta here you smelly hacker!" });
-        console.log(file_path);
-        return null;
-    }
+// middleware to check API key
+const checkKey = (req, res, next) => {
+  if (!validateKey(req, res)) return;
+  next();
+};
 
-    return file_path;
-}
 
 async function writeAudit(operation, file_path, file_data) {
     // save log to audit.log on AUDIT_ROOT/YYYYMMDD.log
@@ -76,7 +82,9 @@ async function saveToArchive(file_path, file_data) {
 module.exports = {
   isPathGood,
   validateKey,
-  parsePath,
   writeAudit,
-  saveToArchive
+  saveToArchive,
+
+  validatePath,
+  checkKey,
 };
