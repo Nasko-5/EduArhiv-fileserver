@@ -54,7 +54,7 @@ app.post('/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    // STEP 1: Find user by username
+    // find user by username
     // SELECT * means "get all columns"
     // WHERE username = ? means "only rows where username matches"
     const [rows] = await pool.query(
