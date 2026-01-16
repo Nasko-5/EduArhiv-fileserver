@@ -1,8 +1,7 @@
 
 const bcrypt = require('bcrypt');  
-const pool = require('./db');  
 
-module.exports = function(app) {
+module.exports = function(app, pool) {
 
 
 // REGISTER/CREATE USER (for teachers to create student accounts)
@@ -11,6 +10,9 @@ module.exports = function(app) {
 app.post('/auth/register', async (req, res) => {
   try {
     const { username, password, role, classId } = req.body;
+    console.log(req.body);
+    console.trace('Register trace');
+    console.log('Register attempt:', { username, role, classId });
     
     // hash the password 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -22,13 +24,16 @@ app.post('/auth/register', async (req, res) => {
     );
     
     const userId = result.insertId;  // get the ID of the new user
+    console.log('User created with ID:', userId);
     
     // if this is a student and they gave a classId, add them to the class
     if (role === 'student' && classId) {
+      console.log('Adding student to class:', classId);
       await pool.query(
-        'INSERT INTO class_members (class_id, user_id) VALUES (?, ?)',
-        [classId, userId]
+      'INSERT INTO class_members (class_id, user_id) VALUES (?, ?)',
+      [classId, userId]
       );
+      console.log('Student added to class successfully');
     }
     
     res.json({ 
@@ -37,8 +42,9 @@ app.post('/auth/register', async (req, res) => {
       message: 'User created!' 
     });
     
-  } catch (error) {
+    } catch (error) {
     console.error('Register error:', error);
+    console.trace('Error trace:', error);
     
     // check if username already exists
     if (error.code === 'ER_DUP_ENTRY') {
@@ -46,7 +52,7 @@ app.post('/auth/register', async (req, res) => {
     }
     
     res.status(500).json({ error: 'Registration failed' });
-  }
+    }
 });
 
 // LOGIN

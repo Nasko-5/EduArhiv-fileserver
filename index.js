@@ -45,8 +45,20 @@ app.use(
   })
 );
 
-// Body parser
-app.use(express.raw({ type: "*/*", limit: "50mb" }));
+// =============================================================================
+// Smart Body Parsing Middleware
+// =============================================================================
+
+app.use((req, res, next) => {
+  // If the request is targeting the file system (/fs), we expect binary/raw data (Buffer)
+  if (req.path.startsWith('/fs')) {
+    express.raw({ type: "*/*", limit: "50mb" })(req, res, next);
+  } 
+  // For everything else (Auth, etc), we expect JSON
+  else {
+    express.json()(req, res, next);
+  }
+});
 
 // Key validation middleware
 const checkKey = (req, res, next) => {
@@ -60,9 +72,6 @@ const validatePath = (req, res, next) => {
   next();
 };
 
-// Auth routes
-require("./auth")(app);
-
 // Protected routes
 app.use("/auth", checkKey);
 app.use("/fs", checkKey);
@@ -74,24 +83,32 @@ app.use("/fs", checkKey);
 async function initDatabase() {
   try {
     const sql = fs.readFileSync("./init.sql", "utf8");
+    console.log('📄 SQL file loaded, length:', sql.length);
 
-    const statements = sql
+    // Remove all comments first
+    const cleanedSQL = sql
+      .split('\n')
+      .filter(line => !line.trim().startsWith('--'))
+      .join('\n');
+
+    const statements = cleanedSQL
       .split(";")
       .map((stmt) => stmt.trim())
-      .filter((stmt) => stmt.length > 0 && !stmt.startsWith("--"));
+      .filter((stmt) => stmt.length > 0);
+
+    console.log(`📊 Found ${statements.length} SQL statements to execute`);
 
     for (const statement of statements) {
+      console.log('🔨 Executing:', statement.substring(0, 80) + '...');
       await pool.query(statement);
+      console.log('✅ Done');
     }
 
     console.log("✓ Database tables ready!");
   } catch (error) {
-    console.error("Database init error:", error);
+    console.error("❌ Database init error:", error);
   }
 }
-
-initDatabase();
-
 // =============================================================================
 // Routes
 // =============================================================================
@@ -312,9 +329,15 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
 // Server Startup
 // =============================================================================
 
-app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
-  fs.mkdirSync(ACTIVE_ROOT, { recursive: true });
-  fs.mkdirSync(AUDIT_ROOT, { recursive: true });
-  fs.mkdirSync(ARCHIVE_ROOT, { recursive: true });
-});
+(async () => {
+  await initDatabase();  // Wait for this to finish!
+  
+  require("./auth")(app, pool);
+  
+  app.listen(PORT, () => {
+    console.log(`API running on port ${PORT}`);
+    fs.mkdirSync(ACTIVE_ROOT, { recursive: true });
+    fs.mkdirSync(AUDIT_ROOT, { recursive: true });
+    fs.mkdirSync(ARCHIVE_ROOT, { recursive: true });
+  });
+})();
