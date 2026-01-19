@@ -59,6 +59,7 @@ app.post('/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
+    console.log(`Login attempt ${username} ${password}`)
     // find user by username
     // SELECT * means "get all columns"
     // WHERE username = ? means "only rows where username matches"
@@ -69,6 +70,7 @@ app.post('/auth/login', async (req, res) => {
     
     // STEP 2: Check if user exists
     if (rows.length === 0) {
+      console.log("invalid user")
       return res.status(401).json({ error: 'Invalid username or password' });
     }
     
@@ -78,10 +80,12 @@ app.post('/auth/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     
     if (!passwordMatch) {
+      console.log("invalid password")
       return res.status(401).json({ error: 'Invalid username or password' });
     }
     
     // login successful! return user info
+    console.log("successful login")
     res.json({
       success: true,
       user: {

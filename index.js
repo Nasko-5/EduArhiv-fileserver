@@ -99,6 +99,21 @@ async function initDatabase() {
     console.error("X Database init error:", error);
   }
 }
+
+async function waitForDB(pool, retries = 10) {
+  while (retries--) {
+    try {
+      await pool.query('SELECT 1');
+      console.log('DB is up');
+      return;
+    } catch (err) {
+      console.log('DB not up yet, waiting...');
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  throw new Error('DB never came up');
+}
+
 // =============================================================================
 // Routes
 // =============================================================================
@@ -369,10 +384,17 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
 // =============================================================================
 
 (async () => {
-  await initDatabase();  // Wait for this to finish!
+  await waitForDB(pool);  // Wait for this to finish!
+  await initDatabase();
   
   require("./auth")(app, pool);
   
+  console.log({
+    DB_HOST: process.env.DB_HOST,
+    DB_USER: process.env.DB_USER,
+    DB_NAME: process.env.DB_NAME
+  });
+
   app.listen(PORT, () => {
     console.log(`API running on port ${PORT}`);
     fs.mkdirSync(ACTIVE_ROOT, { recursive: true });
