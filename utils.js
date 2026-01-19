@@ -3,6 +3,10 @@ const fs = require("fs");
 const path = require("path"); // 1. Missing import
 const crypto = require("crypto"); 
 
+const ACTIVE_ROOT = "/data/active";
+const ARCHIVE_ROOT = "/data/archive/file-archive";
+const AUDIT_ROOT = "/data/archive/audit";
+
 // basic path traversal prevention
 // resolve is used here to find the absolute path of both root and targetPath
 // then we check if the resolved targetPath starts with the resolved root path
@@ -14,13 +18,21 @@ function isPathGood(root, targetPath) {
 }
 
 // midelware to validate 'path' query parameter
+// utils.js
+
 const validatePath = (req, res, next) => {
-  const file_path = req.query.path;
-  
-  if (!file_path) {
+  let file_path = req.query.path;
+
+  // 1. Check if the parameter is missing completely
+  if (file_path === undefined || file_path === null) {
     return res.status(400).json({ error: "Path parameter is required" });
   }
-  
+
+  // 2. FIX: If the user sends "/", treat it as the root of the active directory
+  if (file_path === '/') {
+    file_path = '.';
+  }
+
   if (!isPathGood(ACTIVE_ROOT, file_path)) {
     console.log(`Invalid path attempt: ${file_path}`);
     return res.status(400).json({ error: "Bad file path! Get outta here you smelly hacker!" });
@@ -87,4 +99,8 @@ module.exports = {
 
   validatePath,
   checkKey,
+
+  ACTIVE_ROOT,
+  ARCHIVE_ROOT,
+  AUDIT_ROOT,
 };

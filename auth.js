@@ -10,10 +10,7 @@ module.exports = function(app, pool) {
 app.post('/auth/register', async (req, res) => {
   try {
     const { username, password, role, classId } = req.body;
-    console.log(req.body);
-    console.trace('Register trace');
-    console.log('Register attempt:', { username, role, classId });
-    
+
     // hash the password 
     const passwordHash = await bcrypt.hash(password, 10);
     

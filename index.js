@@ -8,13 +8,10 @@ const os = require("os");
 require("dotenv").config();
 
 const pool = require("./db");
-const { validateKey } = require("./utils");
+const { validateKey, validatePath, ACTIVE_ROOT, ARCHIVE_ROOT, AUDIT_ROOT } = require("./utils");
 const basicAuth = require("express-basic-auth");
 
 // Constants
-const ACTIVE_ROOT = "/data/active";
-const ARCHIVE_ROOT = "/data/archive/file-archive";
-const AUDIT_ROOT = "/data/archive/audit";
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -67,10 +64,7 @@ const checkKey = (req, res, next) => {
 };
 
 // Path validation middleware
-const validatePath = (req, res, next) => {
-  validatePath(req, res);
-  next();
-};
+
 
 // Protected routes
 app.use("/auth", checkKey);
@@ -83,7 +77,6 @@ app.use("/fs", checkKey);
 async function initDatabase() {
   try {
     const sql = fs.readFileSync("./init.sql", "utf8");
-    console.log('📄 SQL file loaded, length:', sql.length);
 
     // Remove all comments first
     const cleanedSQL = sql
@@ -96,17 +89,14 @@ async function initDatabase() {
       .map((stmt) => stmt.trim())
       .filter((stmt) => stmt.length > 0);
 
-    console.log(`📊 Found ${statements.length} SQL statements to execute`);
 
     for (const statement of statements) {
-      console.log('🔨 Executing:', statement.substring(0, 80) + '...');
       await pool.query(statement);
-      console.log('✅ Done');
     }
 
     console.log("✓ Database tables ready!");
   } catch (error) {
-    console.error("❌ Database init error:", error);
+    console.error("X Database init error:", error);
   }
 }
 // =============================================================================
@@ -239,6 +229,55 @@ app.put("/fs/replace", validatePath, async (req, res) => {
     console.error("Error during replace:", error);
     res.status(500).json({ error: "Server failed to replace the file." });
   }
+});
+
+// list all files/folders in a specific directory
+app.get("/fs/listing", validatePath, async (req, res) => {
+  const file_path = req.file_path;
+  const full_path = path.join(ACTIVE_ROOT, file_path);
+
+  try {
+    const files = await fsPromises.readdir(full_path, { withFileTypes: true });
+    
+    const items = files.map((file) => ({
+      name: file.name,
+      type: file.isDirectory() ? "directory" : "file",
+      path: path.join(file_path, file.name) 
+    }));
+    
+    res.json({ items: items });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: "Directory not found!" });
+    }
+    if (error.code === 'ENOTDIR') {
+      return res.status(400).json({ error: "Path is not a directory!" });
+    }
+    console.error("Error during listing:", error);
+    res.status(500).json({ error: "Server failed to list directory contents." });
+  }
+});
+
+
+app.get("/fs/path_from_root", validatePath, async (req, res) => {
+  const file_path = req.file_path;
+  
+  const segments = file_path.split(path.sep).filter(s => s.length > 0);
+
+  const breadcrumbs = [
+    { name: "Root", path: "" } 
+  ];
+  
+  let currentPath = "";
+  for (const segment of segments) {
+    currentPath = path.join(currentPath, segment);
+    breadcrumbs.push({
+      name: segment,
+      path: currentPath
+    });
+  }
+  
+  res.json({ breadcrumbs: breadcrumbs });
 });
 
 // =============================================================================
