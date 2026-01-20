@@ -296,8 +296,9 @@ app.get("/fs/path_from_root", validatePath, async (req, res) => {
 });
 
 app.post("/fs/mkdir", validatePath, async (req, res) => {
-  const file_path = req.file_path; // validated path
+  const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
+  const dir = path.dirname(full_path);
 
   try {
     // Check if it already exists
@@ -312,7 +313,7 @@ app.post("/fs/mkdir", validatePath, async (req, res) => {
   }
 
   try {
-    await fsPromises.mkdir(full_path, { recursive: true });
+    await fsPromises.mkdir(dir, { recursive: true });
     await writeAudit("create_directory", file_path, Buffer.from("")); // Audit log
     
     res.json({ status: "success", path: file_path });
