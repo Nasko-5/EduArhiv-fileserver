@@ -8,7 +8,7 @@ const os = require("os");
 require("dotenv").config();
 
 const pool = require("./db");
-const { validateKey, validatePath, ACTIVE_ROOT, ARCHIVE_ROOT, AUDIT_ROOT } = require("./utils");
+const { validateKey, validatePath, ACTIVE_ROOT, ARCHIVE_ROOT, AUDIT_ROOT, writeAudit, saveToArchive } = require("./utils");
 const basicAuth = require("express-basic-auth");
 
 // Constants
@@ -293,6 +293,33 @@ app.get("/fs/path_from_root", validatePath, async (req, res) => {
   }
   
   res.json({ breadcrumbs: breadcrumbs });
+});
+
+app.post("/fs/mkdir", validatePath, async (req, res) => {
+  const file_path = req.file_path; // validated path
+  const full_path = path.join(ACTIVE_ROOT, file_path);
+
+  try {
+    // Check if it already exists
+    await fsPromises.access(full_path);
+    return res.status(409).json({ error: "Directory already exists!" });
+  } catch (error) {
+    // It doesn't exist, which is good. ENOENT is expected here.
+    if (error.code !== 'ENOENT') {
+        console.error("Error checking directory:", error);
+        return res.status(500).json({ error: "Server error checking directory." });
+    }
+  }
+
+  try {
+    await fsPromises.mkdir(full_path, { recursive: true });
+    await writeAudit("create_directory", file_path, Buffer.from("")); // Audit log
+    
+    res.json({ status: "success", path: file_path });
+  } catch (error) {
+    console.error("Error during directory creation:", error);
+    res.status(500).json({ error: "Server failed to create directory." });
+  }
 });
 
 // =============================================================================
