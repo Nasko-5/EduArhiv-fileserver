@@ -20,6 +20,7 @@ function isPathGood(root, targetPath) {
 // midelware to validate 'path' query parameter
 // utils.js
 
+// midelware to validate 'path' query parameter
 const validatePath = (req, res, next) => {
   let file_path = req.query.path;
 
@@ -31,6 +32,10 @@ const validatePath = (req, res, next) => {
   // 2. FIX: If the user sends "/", treat it as the root of the active directory
   if (file_path === '/') {
     file_path = '.';
+  } 
+
+  else if (file_path.startsWith('/')) {
+      file_path = file_path.substring(1);
   }
 
   if (!isPathGood(ACTIVE_ROOT, file_path)) {
@@ -41,7 +46,6 @@ const validatePath = (req, res, next) => {
   req.file_path = file_path;
   next();
 };
-
 
 // get x-api-key header and compare it to the value of the .env API_KEY variable
 function validateKey(req, res) {

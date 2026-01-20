@@ -187,6 +187,13 @@ app.get("/fs/download", validatePath, async (req, res) => {
     const file_data = await fsPromises.readFile(full_path);
     await writeAudit("download", file_path, file_data);
 
+    const filename = path.basename(file_path);
+
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    res.type(filename);
+
+
     res.send(file_data);
   } catch (error) {
     if (error.code === "ENOENT") {
@@ -298,14 +305,12 @@ app.get("/fs/path_from_root", validatePath, async (req, res) => {
 app.post("/fs/mkdir", validatePath, async (req, res) => {
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
-  const dir = path.dirname(full_path);
 
   try {
     // Check if it already exists
     await fsPromises.access(full_path);
     return res.status(409).json({ error: "Directory already exists!" });
   } catch (error) {
-    // It doesn't exist, which is good. ENOENT is expected here.
     if (error.code !== 'ENOENT') {
         console.error("Error checking directory:", error);
         return res.status(500).json({ error: "Server error checking directory." });
@@ -313,8 +318,8 @@ app.post("/fs/mkdir", validatePath, async (req, res) => {
   }
 
   try {
-    await fsPromises.mkdir(dir, { recursive: true });
-    await writeAudit("create_directory", file_path, Buffer.from("")); // Audit log
+    await fsPromises.mkdir(full_path, { recursive: true });
+    await writeAudit("create_directory", file_path, Buffer.from("")); 
     
     res.json({ status: "success", path: file_path });
   } catch (error) {
