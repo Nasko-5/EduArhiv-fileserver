@@ -20,8 +20,15 @@ const app = express();
 // Middleware Setup
 // =============================================================================
 
+// Global Request Logger (Logs EVERY incoming request)
+app.use((req, res, next) => {
+  console.log(`[GLOBAL] ${req.method} ${req.url} - IP: ${req.ip}`);
+  next();
+});
+
 // Basic authentication (if enabled)
 if (process.env.BASIC_AUTH_PASSWORD) {
+  console.log("[INIT] Basic Auth Enabled.");
   app.use(
     basicAuth({
       users: { demo: process.env.BASIC_AUTH_PASSWORD },
@@ -29,6 +36,8 @@ if (process.env.BASIC_AUTH_PASSWORD) {
       realm: "EduArhiv Demo",
     })
   );
+} else {
+  console.log("[INIT] Basic Auth Disabled (BASIC_AUTH_PASSWORD not set).");
 }
 
 // CORS
@@ -47,24 +56,29 @@ app.use(
 // =============================================================================
 
 app.use((req, res, next) => {
+  console.log("[MIDDLEWARE] Determining body parser type...");
   // If the request is targeting the file system (/fs), we expect binary/raw data (Buffer)
   if (req.path.startsWith('/fs')) {
+    console.log("[MIDDLEWARE] Using RAW parser for /fs route");
     express.raw({ type: "*/*", limit: "50mb" })(req, res, next);
   } 
   // For everything else (Auth, etc), we expect JSON
   else {
+    console.log("[MIDDLEWARE] Using JSON parser for non-fs route");
     express.json()(req, res, next);
   }
 });
 
 // Key validation middleware
 const checkKey = (req, res, next) => {
+  console.log("[MIDDLEWARE] Checking API Key...");
   if (!validateKey(req, res)) return;
   next();
 };
 
 // Path validation middleware
-
+// (Handled in utils, but we log the application of it here)
+console.log("[INIT] Loading route protections...");
 
 // Protected routes
 app.use("/auth", checkKey);
@@ -75,8 +89,10 @@ app.use("/fs", checkKey);
 // =============================================================================
 
 async function initDatabase() {
+  console.log("[DB] Initializing Database...");
   try {
     const sql = fs.readFileSync("./init.sql", "utf8");
+    console.log("[DB] init.sql loaded.");
 
     // Remove all comments first
     const cleanedSQL = sql
@@ -89,8 +105,10 @@ async function initDatabase() {
       .map((stmt) => stmt.trim())
       .filter((stmt) => stmt.length > 0);
 
+    console.log(`[DB] Executing ${statements.length} SQL statements...`);
 
     for (const statement of statements) {
+      console.log(`[DB] Executing SQL: ${statement.substring(0, 50)}...`);
       await pool.query(statement);
     }
 
@@ -101,13 +119,14 @@ async function initDatabase() {
 }
 
 async function waitForDB(pool, retries = 10) {
+  console.log(`[DB] Waiting for Database connection... (${retries} retries left)`);
   while (retries--) {
     try {
       await pool.query('SELECT 1');
-      console.log('DB is up');
+      console.log('[DB] DB is up!');
       return;
     } catch (err) {
-      console.log('DB not up yet, waiting...');
+      console.log(`[DB] DB not up yet, waiting... (Retries left: ${retries})`);
       await new Promise(r => setTimeout(r, 2000));
     }
   }
@@ -119,6 +138,7 @@ async function waitForDB(pool, retries = 10) {
 // =============================================================================
 
 app.get("/", (req, res) => {
+  console.log("[ROUTE] GET /");
   res.send(`
     <h1>EduArhiv File Server API</h1>
     <p>This is not intended for public usage! Turn back now!</p>
@@ -126,10 +146,13 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+  console.log("[ROUTE] GET /health");
   const uptime = process.uptime();
   const memUsage = process.memoryUsage();
   const cpuUsage = process.cpuUsage();
   const loadAvg = os.loadavg();
+
+  console.log(`[HEALTH] Uptime: ${uptime}, Memory: ${(memUsage.heapUsed / 1024 / 1024).toFixed(2)} MB`);
 
   const html = `
     <html>
@@ -152,11 +175,17 @@ app.get("/health", (req, res) => {
 // =============================================================================
 
 app.post("/fs/upload", validatePath, async (req, res) => {
+  console.log("[ROUTE] POST /fs/upload");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
   const dir = path.dirname(full_path);
 
+  console.log(`[UPLOAD] Target Path: ${file_path}`);
+  console.log(`[UPLOAD] Full System Path: ${full_path}`);
+  console.log(`[UPLOAD] Data Length: ${req.body ? req.body.length : 0} bytes`);
+
   if (fs.existsSync(full_path)) {
+    console.log("[UPLOAD] Error: File already exists.");
     return res.status(409).json({
       error: "File already exists! Consider using the /replace endpoint",
     });
@@ -164,102 +193,127 @@ app.post("/fs/upload", validatePath, async (req, res) => {
 
   const file_data = req.body;
   if (!file_data || file_data.length === 0) {
+    console.log("[UPLOAD] Error: No file data provided.");
     return res.status(400).json({ error: "No file data provided!" });
   }
 
   try {
+    console.log(`[UPLOAD] Ensuring directory exists: ${dir}`);
     await fsPromises.mkdir(dir, { recursive: true });
     await fsPromises.writeFile(full_path, file_data);
+    console.log("[UPLOAD] File written successfully.");
+    
     await writeAudit("upload", file_path, file_data);
 
     res.json({ status: "success", path: file_path });
   } catch (error) {
-    console.error("Error during upload:", error);
+    console.error("[UPLOAD] Error during upload:", error);
     res.status(500).json({ error: "Server failed to upload the file." });
   }
 });
 
 app.get("/fs/download", validatePath, async (req, res) => {
+  console.log("[ROUTE] GET /fs/download");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
 
+  console.log(`[DOWNLOAD] Requesting: ${file_path}`);
+
   try {
     const file_data = await fsPromises.readFile(full_path);
+    console.log(`[DOWNLOAD] File read. Size: ${file_data.length} bytes`);
+    
     await writeAudit("download", file_path, file_data);
 
     const filename = path.basename(file_path);
-
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
     res.type(filename);
-
-
     res.send(file_data);
   } catch (error) {
     if (error.code === "ENOENT") {
+      console.log("[DOWNLOAD] Error: File not found.");
       return res.status(404).json({ error: "File not found!" });
     }
-    console.error("Error during download:", error);
+    console.error("[DOWNLOAD] Error during download:", error);
     res.status(500).json({ error: "Server failed to fetch the file" });
   }
 });
 
 app.delete("/fs/delete", validatePath, async (req, res) => {
+  console.log("[ROUTE] DELETE /fs/delete");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
+
+  console.log(`[DELETE] Target: ${file_path}`);
 
   try {
     const file_data = await fsPromises.readFile(full_path);
     await fsPromises.rm(full_path);
+    console.log("[DELETE] File removed successfully.");
     await writeAudit("delete", file_path, file_data);
 
     res.json({ status: "success", path: file_path });
   } catch (error) {
     if (error.code === "ENOENT") {
+      console.log("[DELETE] Error: File not found.");
       return res.status(404).json({ error: "File not found!" });
     }
     if (error.code === "ENOTEMPTY") {
+      console.log("[DELETE] Error: Directory not empty.");
       return res.status(400).json({ error: "Directory is not empty!" });
     }
-    console.error("Error during delete:", error);
+    console.error("[DELETE] Error during delete:", error);
     res.status(500).json({ error: "Server failed to delete the file." });
   }
 });
 
 app.put("/fs/replace", validatePath, async (req, res) => {
+  console.log("[ROUTE] PUT /fs/replace");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
   const new_file_data = req.body;
 
+  console.log(`[REPLACE] Target: ${file_path}`);
+  console.log(`[REPLACE] New Data Size: ${new_file_data ? new_file_data.length : 0} bytes`);
+
   if (!new_file_data || new_file_data.length === 0) {
+    console.log("[REPLACE] Error: No replacement data.");
     return res.status(400).json({ error: "No replacement file data provided!" });
   }
 
   try {
     const old_file_data = await fsPromises.readFile(full_path);
+    console.log(`[REPLACE] Old file read. Archiving...`);
     await saveToArchive(file_path, old_file_data);
+    
     await fsPromises.writeFile(full_path, new_file_data);
+    console.log("[REPLACE] New file written.");
     await writeAudit("replace", file_path, new_file_data);
 
     res.json({ status: "success", path: file_path });
   } catch (error) {
     if (error.code === "ENOENT") {
+      console.log("[REPLACE] Error: File not found.");
       return res.status(404).json({
         error: "The file you are trying to replace was not found, consider using /upload instead",
       });
     }
-    console.error("Error during replace:", error);
+    console.error("[REPLACE] Error during replace:", error);
     res.status(500).json({ error: "Server failed to replace the file." });
   }
 });
 
 // list all files/folders in a specific directory
 app.get("/fs/listing", validatePath, async (req, res) => {
+  console.log("[ROUTE] GET /fs/listing");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
 
+  console.log(`[LISTING] Directory: ${file_path}`);
+
   try {
     const files = await fsPromises.readdir(full_path, { withFileTypes: true });
+    console.log(`[LISTING] Found ${files.length} items.`);
     
     const items = files.map((file) => ({
       name: file.name,
@@ -270,18 +324,21 @@ app.get("/fs/listing", validatePath, async (req, res) => {
     res.json({ items: items });
   } catch (error) {
     if (error.code === 'ENOENT') {
+      console.log("[LISTING] Error: Directory not found.");
       return res.status(404).json({ error: "Directory not found!" });
     }
     if (error.code === 'ENOTDIR') {
+      console.log("[LISTING] Error: Path is not a directory.");
       return res.status(400).json({ error: "Path is not a directory!" });
     }
-    console.error("Error during listing:", error);
+    console.error("[LISTING] Error during listing:", error);
     res.status(500).json({ error: "Server failed to list directory contents." });
   }
 });
 
 
 app.get("/fs/path_from_root", validatePath, async (req, res) => {
+  console.log("[ROUTE] GET /fs/path_from_root");
   const file_path = req.file_path;
   
   const segments = file_path.split(path.sep).filter(s => s.length > 0);
@@ -299,31 +356,37 @@ app.get("/fs/path_from_root", validatePath, async (req, res) => {
     });
   }
   
+  console.log(`[PATH_FROM_ROOT] Generated ${breadcrumbs.length} breadcrumbs.`);
   res.json({ breadcrumbs: breadcrumbs });
 });
 
 app.post("/fs/mkdir", validatePath, async (req, res) => {
+  console.log("[ROUTE] POST /fs/mkdir");
   const file_path = req.file_path;
   const full_path = path.join(ACTIVE_ROOT, file_path);
+
+  console.log(`[MKDIR] Creating: ${file_path}`);
 
   try {
     // Check if it already exists
     await fsPromises.access(full_path);
+    console.log("[MKDIR] Error: Directory already exists.");
     return res.status(409).json({ error: "Directory already exists!" });
   } catch (error) {
     if (error.code !== 'ENOENT') {
-        console.error("Error checking directory:", error);
+        console.error("[MKDIR] Error checking directory:", error);
         return res.status(500).json({ error: "Server error checking directory." });
     }
   }
 
   try {
     await fsPromises.mkdir(full_path, { recursive: true });
+    console.log("[MKDIR] Directory created successfully.");
     await writeAudit("create_directory", file_path, Buffer.from("")); 
     
     res.json({ status: "success", path: file_path });
   } catch (error) {
-    console.error("Error during directory creation:", error);
+    console.error("[MKDIR] Error during directory creation:", error);
     res.status(500).json({ error: "Server failed to create directory." });
   }
 });
@@ -333,16 +396,21 @@ app.post("/fs/mkdir", validatePath, async (req, res) => {
 // =============================================================================
 
 app.get("/fs/versions", validatePath, async (req, res) => {
+  console.log("[ROUTE] GET /fs/versions");
   const file_path = req.file_path;
   const archive_dir = path.join(ARCHIVE_ROOT, path.dirname(file_path));
   const base_name = path.basename(file_path, path.extname(file_path));
   const ext_name = path.extname(file_path);
+
+  console.log(`[VERSIONS] Checking versions for: ${file_path}`);
 
   try {
     const files = await fsPromises.readdir(archive_dir);
     const versions = files
       .filter((f) => f.startsWith(base_name + "_") && f.endsWith(ext_name))
       .sort((a, b) => parseInt(a.match(/_(\d+)\./)[1]) - parseInt(b.match(/_(\d+)\./)[1]));
+
+    console.log(`[VERSIONS] Found ${versions.length} archived versions.`);
 
     if (versions.length === 0) {
       return res.status(404).json({ error: "No archived versions found for this file!" });
@@ -360,12 +428,13 @@ app.get("/fs/versions", validatePath, async (req, res) => {
 
     res.json(versionList);
   } catch (error) {
-    console.error("Error during list-versions:", error);
+    console.error("[VERSIONS] Error during list-versions:", error);
     res.status(500).json({ error: "Server failed to list versions." });
   }
 });
 
 app.post("/fs/rollback", validatePath, async (req, res) => {
+  console.log("[ROUTE] POST /fs/rollback");
   const file_path = req.file_path;
   const archive_dir = path.join(ARCHIVE_ROOT, path.dirname(file_path));
   const base_name = path.basename(file_path, path.extname(file_path));
@@ -378,6 +447,7 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
       .sort((a, b) => parseInt(a.match(/_(\d+)\./)[1]) - parseInt(b.match(/_(\d+)\./)[1]));
 
     if (versions.length === 0) {
+      console.log("[ROLLBACK] Error: No archived versions found.");
       return res.status(404).json({ error: "No archived versions found for this file!" });
     }
 
@@ -385,29 +455,35 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
     try {
       const body = JSON.parse(req.body.toString());
       version = body.version;
+      console.log(`[ROLLBACK] Requested version: ${version}`);
     } catch (parseError) {
+      console.log("[ROLLBACK] Error: Invalid JSON body.");
       return res.status(400).json({ error: "Invalid JSON in request body!" });
     }
 
     if (!version) {
+      console.log("[ROLLBACK] Error: Version parameter missing.");
       return res.status(400).json({ error: "Version parameter required for rollback!" });
     }
 
     const versionIndex = parseInt(version) - 1;
     if (versionIndex < 0 || versionIndex >= versions.length) {
+      console.log("[ROLLBACK] Error: Invalid version number.");
       return res.status(400).json({ error: "Invalid version number!" });
     }
 
     const archive_file = path.join(archive_dir, versions[versionIndex]);
     const full_path = path.join(ACTIVE_ROOT, file_path);
     const archived_data = await fsPromises.readFile(archive_file);
+    
+    console.log(`[ROLLBACK] Restoring file from: ${archive_file}`);
 
     await fsPromises.writeFile(full_path, archived_data);
     await writeAudit("rollback", file_path, archived_data);
 
     res.json({ status: "success", path: file_path, version: versionIndex + 1 });
   } catch (error) {
-    console.error("Error during rollback:", error);
+    console.error("[ROLLBACK] Error during rollback:", error);
     res.status(500).json({ error: "Server failed to process rollback." });
   }
 });
@@ -433,5 +509,6 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
     fs.mkdirSync(ACTIVE_ROOT, { recursive: true });
     fs.mkdirSync(AUDIT_ROOT, { recursive: true });
     fs.mkdirSync(ARCHIVE_ROOT, { recursive: true });
+    console.log("[INIT] Root directories ensured.");
   });
 })();
