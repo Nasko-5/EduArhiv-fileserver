@@ -11,6 +11,13 @@ module.exports = function(app, pool) {
 // =============================================================================
 app.post('/auth/register', async (req, res) => {
   console.log("[AUTH] POST /auth/register request received.");
+  // check x-role header to ensure only teachers can create accounts
+  const requesterRole = req.headers['x-role'];
+  console.log(`[AUTH] Requester Role from Header: ${requesterRole}`);
+  if (requesterRole !== 'teacher') {
+    console.log("[AUTH] Registration attempt denied: requester is not a teacher.");
+    return res.status(403).json({ error: 'You do not have access to this feature!' });
+  }
   try {
     const { username, password, role, classId } = req.body;
     

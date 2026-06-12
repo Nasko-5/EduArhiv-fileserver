@@ -35,13 +35,11 @@ const validatePath = (req, res, next) => {
 
   console.log(`[PATH_VALIDATOR] Raw Path Query: ${file_path}`);
 
-  // 1. Check if the parameter is missing completely
   if (file_path === undefined || file_path === null) {
     console.log("[PATH_VALIDATOR] Error: Path parameter missing.");
     return res.status(400).json({ error: "Path parameter is required" });
   }
 
-  // 2. FIX: If the user sends "/", treat it as the root of the active directory
   if (file_path === '/') {
     console.log("[PATH_VALIDATOR] Normalizing '/' to '.'");
     file_path = '.';
@@ -115,7 +113,7 @@ async function writeAudit(operation, file_path, file_data) {
 async function saveToArchive(file_path, file_data) {
     const new_file_name = `${path.basename(file_path, path.extname(file_path))}_${Date.now()}${path.extname(file_path)}`;
     const archive_path = path.join(ARCHIVE_ROOT, path.dirname(file_path), new_file_name);
-    const archive_dir = dirname = path.dirname(archive_path);
+    const archive_dir = path.dirname(archive_path);
 
     console.log(`[ARCHIVE] Saving snapshot of ${file_path} to ${archive_path}`);
 
