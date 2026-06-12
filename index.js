@@ -145,26 +145,52 @@ app.get("/", (req, res) => {
   `);
 });
 
-app.get("/health", (req, res) => {
-  console.log("[ROUTE] GET /health");
+app.get("/health", async (req, res) => {
   const uptime = process.uptime();
   const memUsage = process.memoryUsage();
-  const cpuUsage = process.cpuUsage();
   const loadAvg = os.loadavg();
 
-  console.log(`[HEALTH] Uptime: ${uptime}, Memory: ${(memUsage.heapUsed / 1024 / 1024).toFixed(2)} MB`);
+  // snapshot CPU
+  const cpuBefore = process.cpuUsage();
+  await new Promise(r => setTimeout(r, 100));
+  const cpuAfter = process.cpuUsage(cpuBefore); // passing cpuBefore gets the delta automatically
 
   const html = `
+    <!DOCTYPE html>
     <html>
-      <head><title>EduArhiv Health</title></head>
-      <body>
-        <h1>Server Health Status</h1>
+    <head>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          background: linear-gradient(to bottom, white, lightgreen);
+        }
+        .box {
+          background: white;
+          padding: 40px;
+          border-radius: 0;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+          width: fit-content;
+        }
+        h1 {
+          margin-top: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="box">
+        <h1>EduArhiv File Server Health</h1>
         <hr>
-        <p><strong>Uptime:</strong> ${Math.floor(uptime)}s</p>
-        <p><strong>Memory Usage:</strong> ${(memUsage.heapUsed / 1024 / 1024).toFixed(2)} MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)} MB</p>
-        <p><strong>CPU Usage:</strong> ${((cpuUsage.user / 1000000) * 100).toFixed(2)}% user, ${((cpuUsage.system / 1000000) * 100).toFixed(2)}% system</p>
-        <p><strong>Load Average:</strong> ${loadAvg[0].toFixed(2)}, ${loadAvg[1].toFixed(2)}, ${loadAvg[2].toFixed(2)}</p>
-      </body>
+        <p>Uptime: ${uptime.toFixed(2)} seconds</p>
+        <p>Memory Usage: ${(memUsage.rss / 1024 / 1024).toFixed(2)} MB RSS</p>
+        <p>CPU Usage: User ${cpuAfter.user} μs, System ${cpuAfter.system} μs</p>
+        <p>Load Average (1m, 5m, 15m): ${loadAvg.map(avg => avg.toFixed(2)).join(", ")}</p>
+      </div>
+    </body>
     </html>
   `;
   res.status(200).send(html);
