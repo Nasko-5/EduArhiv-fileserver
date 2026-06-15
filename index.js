@@ -473,17 +473,17 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
       .sort((a, b) => parseInt(a.match(/_(\d+)\./)[1]) - parseInt(b.match(/_(\d+)\./)[1]));
 
     if (versions.length === 0) {
-      console.log("[ROLLBACK] Error: No archived versions found.");
-      return res.status(404).json({ error: "No archived versions found for this file!" });
+      console.log(`[ROLLBACK] Error: No archived versions found in ${archive_dir}`);
+      return res.status(404).json({ error: "No archived versions found for this file!", archive_dir });
     }
 
     let version;
     try {
       const body = JSON.parse(req.body.toString());
       version = body.version;
-      console.log(`[ROLLBACK] Requested version: ${version}`);
+      console.log(`[ROLLBACK] Requested version: ${version}, available versions: 1..${versions.length}`);
     } catch (parseError) {
-      console.log("[ROLLBACK] Error: Invalid JSON body.");
+      console.log("[ROLLBACK] Error: Invalid JSON body.", parseError.message);
       return res.status(400).json({ error: "Invalid JSON in request body!" });
     }
 
@@ -494,20 +494,20 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
 
     const versionIndex = parseInt(version) - 1;
     if (versionIndex < 0 || versionIndex >= versions.length) {
-      console.log("[ROLLBACK] Error: Invalid version number.");
-      return res.status(400).json({ error: "Invalid version number!" });
+      console.log(`[ROLLBACK] Error: Invalid version number ${version}. Valid range is 1..${versions.length}`);
+      return res.status(400).json({ error: "Invalid version number!", valid_range: `1..${versions.length}` });
     }
 
     const archive_file = path.join(archive_dir, versions[versionIndex]);
     const full_path = path.join(ACTIVE_ROOT, file_path);
     const archived_data = await fsPromises.readFile(archive_file);
     
-    console.log(`[ROLLBACK] Restoring file from: ${archive_file}`);
+    console.log(`[ROLLBACK] Restoring file from archive: ${archive_file}`);
 
     await fsPromises.writeFile(full_path, archived_data);
     await writeAudit("rollback", file_path, archived_data);
 
-    res.json({ status: "success", path: file_path, version: versionIndex + 1 });
+    res.json({ status: "success", path: file_path, version: versionIndex + 1, archive_file });
   } catch (error) {
     console.error("[ROLLBACK] Error during rollback:", error);
     res.status(500).json({ error: "Server failed to process rollback." });
