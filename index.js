@@ -503,6 +503,10 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
     const archived_data = await fsPromises.readFile(archive_file);
     
     console.log(`[ROLLBACK] Restoring file from archive: ${archive_file}`);
+    // save current before overwriting
+    const current_data = await fsPromises.readFile(full_path);
+    await saveToArchive(file_path, current_data);
+
 
     await fsPromises.writeFile(full_path, archived_data);
     await writeAudit("rollback", file_path, archived_data);
@@ -511,6 +515,41 @@ app.post("/fs/rollback", validatePath, async (req, res) => {
   } catch (error) {
     console.error("[ROLLBACK] Error during rollback:", error);
     res.status(500).json({ error: "Server failed to process rollback." });
+  }
+});
+
+// =============================================================================
+// LIST STUDENTS (for teacher account management)
+// GET /auth/students
+// =============================================================================
+app.get('/auth/students', async (req, res) => {
+  console.log("[AUTH] GET /auth/students");
+
+  // check x-role header to ensure only teachers can create accounts
+  const requesterRole = req.headers['x-role'];
+  if (requesterRole !== 'teacher') {
+    return res.status(403).json({ error: 'You do not have access to this feature!' });
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        u.id, 
+        u.username,
+        u.role,
+        c.id as class_id,
+        c.name as class_name,
+      FROM users u
+      LEFT JOIN class_members cm ON u.id = cm.user_id
+      LEFT JOIN classes c ON cm.class_id = c.id
+      WHERE u.role = 'student'
+      ORDER BY u.username
+    `);
+
+    res.json({ students: rows });
+  } catch (error) {
+    console.error('[AUTH] List students error:', error);
+    res.status(500).json({ error: 'Failed to list students' });
   }
 });
 
