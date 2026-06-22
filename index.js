@@ -538,7 +538,7 @@ app.get('/auth/students', async (req, res) => {
         u.username,
         u.role,
         c.id as class_id,
-        c.name as class_name,
+        c.name as class_name
       FROM users u
       LEFT JOIN class_members cm ON u.id = cm.user_id
       LEFT JOIN classes c ON cm.class_id = c.id

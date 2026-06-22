@@ -19,6 +19,7 @@ app.post('/auth/register', async (req, res) => {
     return res.status(403).json({ error: 'You do not have access to this feature!' });
   }
   try {
+    console.log(req.body)
     const { username, password, role, classId } = req.body;
     
     console.log(`[AUTH] Registration Attempt - Username: ${username}, Role: ${role}, ClassId: ${classId}`);
