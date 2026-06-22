@@ -542,7 +542,7 @@ app.get('/auth/students', async (req, res) => {
       FROM users u
       LEFT JOIN class_members cm ON u.id = cm.user_id
       LEFT JOIN classes c ON cm.class_id = c.id
-      WHERE u.role = 'student'
+      WHERE u.role IN ('student', 'student_admin')
       ORDER BY u.username
     `);
 

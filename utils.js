@@ -64,7 +64,7 @@ function validateKey(req, res) {
     const apiKey = req.headers["x-api-key"];
     console.log("[KEY_VALIDATOR] Checking API Key...");
     
-    // Only log if provided, for security don't log the actual value if possible, or log truncated
+    // Only log if provided, for security don't log the actual value
     if (apiKey) {
         console.log(`[KEY_VALIDATOR] Key Provided: ${apiKey.substring(0, 10)}...`);
     } else {
